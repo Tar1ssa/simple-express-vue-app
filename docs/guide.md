@@ -78,10 +78,18 @@ This project is designed to handle real-world security scenarios. Here is exactl
 *   Node.js (v18+) installed.
 *   MySQL Server (XAMPP, etc.) running.
 
-### 2. Setup
-1. Create a database named `express_jwt_api` in your MySQL server.
-2. Update `.env` with your MySQL `DB_USER` and `DB_PASSWORD`.
-3. Install dependencies and run:
+### 2. Setup Database
+**Option A: Using Docker (Recommended)**
+```bash
+docker-compose up -d
+```
+*This starts MySQL and creates the database automatically.*
+
+**Option B: Manual MySQL (XAMPP etc.)**
+1. Create a database named `express_jwt_api`.
+2. Update `.env` with your `DB_USER` and `DB_PASSWORD`.
+
+### 3. Run the App
 ```bash
 npm install
 npm run dev

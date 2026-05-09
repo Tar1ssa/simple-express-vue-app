@@ -60,9 +60,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ─── API Routes ───────────────────────────────────────────
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
+// ─── API & Page Routes ────────────────────────────────────
+app.use('/', authRoutes);
+app.use('/', userRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────
 app.use((req, res) => {
