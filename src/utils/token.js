@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const config = require('../config/env');
-const store = require('../store/memoryStore');
+const store = require('../store/dbStore');
 
 /**
  * Generate a unique JWT ID for token tracking/blacklisting.
