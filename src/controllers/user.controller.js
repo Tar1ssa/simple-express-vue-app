@@ -1,5 +1,5 @@
 const { body, validationResult } = require('express-validator');
-const store = require('../store/memoryStore');
+const store = require('../store/dbStore');
 
 // ─── Validation Rules ─────────────────────────────────────
 
@@ -46,7 +46,7 @@ function sanitizeUser(user) {
 
 async function getProfile(req, res, next) {
   try {
-    const user = store.findUserById(req.user.sub);
+    const user = await store.findUserById(req.user.sub);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
@@ -69,7 +69,7 @@ async function updateProfile(req, res, next) {
 
     if (email !== undefined) {
       // Check email uniqueness (exclude current user)
-      const existingUser = store.findUserByEmail(email);
+      const existingUser = await store.findUserByEmail(email);
       if (existingUser && existingUser.id !== userId) {
         return res.status(409).json({
           success: false,
@@ -86,12 +86,12 @@ async function updateProfile(req, res, next) {
       });
     }
 
-    const updatedUser = store.updateUser(userId, updates);
+    const updatedUser = await store.updateUser(userId, updates);
     if (!updatedUser) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    store.logAudit({
+    await store.logAudit({
       userId,
       event: 'profile_updated',
       ipAddress: req.ip,
@@ -111,7 +111,7 @@ async function updateProfile(req, res, next) {
 
 async function listUsers(req, res, next) {
   try {
-    const users = store.getAllUsers().map(sanitizeUser);
+    const users = (await store.getAllUsers()).map(sanitizeUser);
     res.json({ success: true, data: users, total: users.length });
   } catch (error) {
     next(error);

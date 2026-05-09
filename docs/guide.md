@@ -1,7 +1,7 @@
 # Express JWT API - Complete Project Guide
 
 ## 📌 Project Overview
-**Express JWT API** is a production-style full-stack application. It features a robust **Express.js** backend and a modern **Vue 3** frontend. Its primary goal is to demonstrate a secure authentication workflow using JSON Web Tokens (JWT), including dual-token strategy, account security, and role-based access control.
+**Express JWT API** is a production-style full-stack application. It features a robust **Express.js** backend backed by a **MySQL** database and a modern **Vue 3** frontend. Its primary goal is to demonstrate a secure authentication workflow using JSON Web Tokens (JWT), including dual-token strategy, account security, and role-based access control.
 
 ---
 
@@ -16,9 +16,11 @@ express-jwt-api/
 │   └── vite.config.js # Frontend build & proxy configuration
 ├── src/               # Express.js Backend source code
 │   ├── app.js         # Entry point & middleware
+│   ├── config/        # Environment & Database config
 │   ├── controllers/   # Business logic
+│   ├── models/        # Sequelize models (MySQL)
 │   ├── routes/        # API endpoints
-│   ├── store/         # In-memory data store
+│   ├── store/         # Database store service
 │   └── middleware/    # Auth & Security interceptors
 ├── docs/              # Project documentation
 ├── .env               # Environment variables
@@ -77,12 +79,14 @@ This project is designed to handle real-world security scenarios. Here is exactl
 *   Node.js (v18+) installed.
 
 ### 2. Setup Backend
+1. Create a database named `express_jwt_api` in your MySQL server.
+2. Update `.env` with your MySQL `DB_USER` and `DB_PASSWORD`.
+3. Install dependencies and run:
 ```bash
-# In the root directory
 npm install
-cp .env.example .env
 npm run dev
 ```
+*The app will automatically create the tables on the first run.*
 *Backend runs on `http://localhost:3000`*
 
 ### 3. Setup Frontend

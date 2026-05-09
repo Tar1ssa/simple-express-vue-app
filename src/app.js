@@ -54,11 +54,19 @@ app.use((req, res) => {
 // ─── Global Error Handler ─────────────────────────────────
 app.use(errorHandler);
 
+const sequelize = require('./config/database');
+const store = require('./store/dbStore');
+
 // ─── Start Server ─────────────────────────────────────────
-app.listen(config.port, () => {
-  console.log(`\n🚀 Express JWT API running on http://localhost:${config.port}`);
-  console.log(`📋 Environment: ${config.nodeEnv}`);
-  console.log(`🔑 Access token expiry: ${config.jwt.accessExpiry}`);
-  console.log(`🔄 Refresh token expiry: ${config.jwt.refreshExpiry}`);
-  console.log(`🔒 Account locks after ${config.security.maxLoginAttempts} failed attempts\n`);
+sequelize.sync().then(async () => {
+  await store.seedAdmin();
+  app.listen(config.port, () => {
+    console.log(`\n🚀 Express JWT API (MySQL) running on http://localhost:${config.port}`);
+    console.log(`📋 Environment: ${config.nodeEnv}`);
+    console.log(`🔑 Access token expiry: ${config.jwt.accessExpiry}`);
+    console.log(`🔄 Refresh token expiry: ${config.jwt.refreshExpiry}`);
+    console.log(`🔒 Account locks after ${config.security.maxLoginAttempts} failed attempts\n`);
+  });
+}).catch(err => {
+  console.error('❌ Unable to connect to the database:', err);
 });

@@ -28,7 +28,7 @@ function signAccessToken(user) {
  * Sign a long-lived refresh token and persist it in the store.
  * Payload: { jti, sub, type }
  */
-function signRefreshToken(user) {
+async function signRefreshToken(user) {
   const jti = generateJti();
   const token = jwt.sign(
     { jti, sub: user.id, type: 'refresh' },
@@ -36,7 +36,7 @@ function signRefreshToken(user) {
     { expiresIn: config.jwt.refreshExpiry }
   );
   const decoded = jwt.decode(token);
-  store.storeRefreshToken(jti, {
+  await store.storeRefreshToken(jti, {
     userId: user.id,
     token,
     createdAt: new Date().toISOString(),

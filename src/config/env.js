@@ -16,4 +16,10 @@ module.exports = {
     maxLoginAttempts: parseInt(process.env.MAX_LOGIN_ATTEMPTS, 10) || 5,
     lockDurationMinutes: parseInt(process.env.LOCK_DURATION_MINUTES, 10) || 15,
   },
+  db: {
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    name: process.env.DB_NAME || 'express_jwt_api',
+  },
 };

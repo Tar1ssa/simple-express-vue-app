@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const config = require('../config/env');
-const store = require('../store/memoryStore');
+const store = require('../store/dbStore');
 const {
   signAccessToken,
   signRefreshToken,
@@ -71,14 +71,14 @@ async function register(req, res, next) {
     if (handleValidationErrors(req, res)) return;
     const { name, email, password } = req.body;
 
-    if (store.findUserByEmail(email)) {
+    if (await store.findUserByEmail(email)) {
       return res.status(409).json({ success: false, message: 'Email is already registered.' });
     }
 
     const hashedPassword = await bcrypt.hash(password, config.bcrypt.saltRounds);
-    const user = store.createUser({ name, email, password: hashedPassword });
+    const user = await store.createUser({ name, email, password: hashedPassword });
 
-    store.logAudit({
+    await store.logAudit({
       userId: user.id,
       event: 'register',
       ipAddress: req.ip,
@@ -100,7 +100,7 @@ async function login(req, res, next) {
     if (handleValidationErrors(req, res)) return;
     const { email, password } = req.body;
 
-    const user = store.findUserByEmail(email);
+    const user = await store.findUserByEmail(email);
     if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid email or password.' });
     }
@@ -108,7 +108,7 @@ async function login(req, res, next) {
     // ── Account Lockout Check ──
     if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
       const retryAfterSeconds = Math.ceil((new Date(user.lockedUntil) - new Date()) / 1000);
-      store.logAudit({
+      await store.logAudit({
         userId: user.id, event: 'login_failed',
         ipAddress: req.ip, userAgent: req.headers['user-agent'],
         metadata: { reason: 'account_locked' },
@@ -131,15 +131,15 @@ async function login(req, res, next) {
         updates.lockedUntil = new Date(
           Date.now() + config.security.lockDurationMinutes * 60 * 1000
         ).toISOString();
-        store.logAudit({
+        await store.logAudit({
           userId: user.id, event: 'account_locked',
           ipAddress: req.ip, userAgent: req.headers['user-agent'],
           metadata: { failedAttempts },
         });
       }
 
-      store.updateUser(user.id, updates);
-      store.logAudit({
+      await store.updateUser(user.id, updates);
+      await store.logAudit({
         userId: user.id, event: 'login_failed',
         ipAddress: req.ip, userAgent: req.headers['user-agent'],
         metadata: { failedAttempts },
@@ -161,11 +161,11 @@ async function login(req, res, next) {
     }
 
     // ── Success: Reset lockout & issue tokens ──
-    store.updateUser(user.id, { failedLoginAttempts: 0, lockedUntil: null });
+    await store.updateUser(user.id, { failedLoginAttempts: 0, lockedUntil: null });
     const { token: accessToken } = signAccessToken(user);
-    const { token: refreshToken } = signRefreshToken(user);
+    const { token: refreshToken } = await signRefreshToken(user);
 
-    store.logAudit({
+    await store.logAudit({
       userId: user.id, event: 'login_success',
       ipAddress: req.ip, userAgent: req.headers['user-agent'],
     });
@@ -194,19 +194,19 @@ async function refresh(req, res, next) {
       return res.status(401).json({ success: false, message: 'Invalid or expired refresh token.' });
     }
 
-    const storedToken = store.findRefreshToken(decoded.jti);
+    const storedToken = await store.findRefreshToken(decoded.jti);
     if (!storedToken) {
       return res.status(401).json({ success: false, message: 'Refresh token has been revoked.' });
     }
 
-    const user = store.findUserById(decoded.sub);
+    const user = await store.findUserById(decoded.sub);
     if (!user) {
       return res.status(401).json({ success: false, message: 'User not found.' });
     }
 
     const { token: accessToken } = signAccessToken(user);
 
-    store.logAudit({
+    await store.logAudit({
       userId: user.id, event: 'token_refresh',
       ipAddress: req.ip, userAgent: req.headers['user-agent'],
     });
@@ -229,8 +229,8 @@ async function logout(req, res, next) {
 
     try {
       const decoded = verifyRefreshToken(refreshToken);
-      store.removeRefreshToken(decoded.jti);
-      store.logAudit({
+      await store.removeRefreshToken(decoded.jti);
+      await store.logAudit({
         userId: decoded.sub, event: 'logout',
         ipAddress: req.ip, userAgent: req.headers['user-agent'],
       });
@@ -250,7 +250,7 @@ async function changePassword(req, res, next) {
     const { currentPassword, newPassword } = req.body;
     const userId = req.user.sub;
 
-    const user = store.findUserById(userId);
+    const user = await store.findUserById(userId);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
@@ -261,17 +261,17 @@ async function changePassword(req, res, next) {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, config.bcrypt.saltRounds);
-    store.updateUser(userId, { password: hashedPassword });
+    await store.updateUser(userId, { password: hashedPassword });
 
     // Invalidate ALL existing refresh tokens for this user
-    store.removeAllUserRefreshTokens(userId);
+    await store.removeAllUserRefreshTokens(userId);
 
     // Issue fresh token pair for current session
-    const updatedUser = store.findUserById(userId);
+    const updatedUser = await store.findUserById(userId);
     const { token: accessToken } = signAccessToken(updatedUser);
-    const { token: refreshToken } = signRefreshToken(updatedUser);
+    const { token: refreshToken } = await signRefreshToken(updatedUser);
 
-    store.logAudit({
+    await store.logAudit({
       userId, event: 'password_changed',
       ipAddress: req.ip, userAgent: req.headers['user-agent'],
     });
@@ -297,20 +297,20 @@ async function forgotPassword(req, res, next) {
       message: 'If an account with that email exists, a password reset link has been sent.',
     };
 
-    const user = store.findUserByEmail(email);
+    const user = await store.findUserByEmail(email);
     if (!user) return res.json(genericResponse);
 
     const resetToken = generateResetToken();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
 
-    store.storeResetToken(resetToken, { userId: user.id, expiresAt });
+    await store.storeResetToken(resetToken, { userId: user.id, expiresAt });
 
     // In production, send via email — here we log to console
     console.log(`\n📧 Password Reset Token for ${email}:`);
     console.log(`   Token: ${resetToken}`);
     console.log(`   Expires: ${expiresAt}\n`);
 
-    store.logAudit({
+    await store.logAudit({
       userId: user.id, event: 'password_reset_request',
       ipAddress: req.ip, userAgent: req.headers['user-agent'],
     });
@@ -326,27 +326,27 @@ async function resetPassword(req, res, next) {
     if (handleValidationErrors(req, res)) return;
     const { token, newPassword } = req.body;
 
-    const resetEntry = store.findResetToken(token);
+    const resetEntry = await store.findResetToken(token);
     if (!resetEntry) {
       return res.status(400).json({ success: false, message: 'Invalid or expired reset token.' });
     }
 
-    const user = store.findUserById(resetEntry.userId);
+    const user = await store.findUserById(resetEntry.userId);
     if (!user) {
       return res.status(400).json({ success: false, message: 'Invalid reset token.' });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, config.bcrypt.saltRounds);
-    store.updateUser(user.id, {
+    await store.updateUser(user.id, {
       password: hashedPassword,
       failedLoginAttempts: 0,
       lockedUntil: null,
     });
 
-    store.removeResetToken(token);
-    store.removeAllUserRefreshTokens(user.id);
+    await store.removeResetToken(token);
+    await store.removeAllUserRefreshTokens(user.id);
 
-    store.logAudit({
+    await store.logAudit({
       userId: user.id, event: 'password_reset',
       ipAddress: req.ip, userAgent: req.headers['user-agent'],
     });

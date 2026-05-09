@@ -1,12 +1,12 @@
 const { verifyAccessToken } = require('../utils/token');
-const store = require('../store/memoryStore');
+const store = require('../store/dbStore');
 
 /**
  * JWT Authentication Middleware
  * Extracts Bearer token from Authorization header, verifies it,
  * checks the blacklist, and attaches decoded user to req.user.
  */
-function authenticate(req, res, next) {
+async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -22,7 +22,7 @@ function authenticate(req, res, next) {
     const decoded = verifyAccessToken(token);
 
     // Check if token has been revoked
-    if (store.isTokenBlacklisted(decoded.jti)) {
+    if (await store.isTokenBlacklisted(decoded.jti)) {
       return res.status(401).json({
         success: false,
         message: 'Token has been revoked.',
@@ -30,7 +30,7 @@ function authenticate(req, res, next) {
     }
 
     // Verify user still exists
-    const user = store.findUserById(decoded.sub);
+    const user = await store.findUserById(decoded.sub);
     if (!user) {
       return res.status(401).json({
         success: false,
