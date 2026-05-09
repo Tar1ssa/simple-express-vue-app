@@ -8,8 +8,9 @@ const router = Router();
 // All user routes require authentication
 router.use(authenticate);
 
+router.get('/dashboard', user.getDashboard);
 router.get('/profile', user.getProfile);
-router.put('/profile', user.updateProfileValidation, user.updateProfile);
-router.get('/', authorize('admin'), user.listUsers);
+router.post('/profile', user.updateProfileValidation, user.updateProfile); // Using POST for form submission
+router.get('/users', authorize('admin'), user.listUsers);
 
 module.exports = router;

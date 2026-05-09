@@ -1,0 +1,37 @@
+<%- include('partials/header', { title: 'User Management' }) %>
+
+<div class="card">
+    <h1>User Management</h1>
+    <p style="color: var(--text-muted);">List of all registered users in the system.</p>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Joined</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% users.forEach(u => { %>
+                    <tr>
+                        <td><%= u.name %></td>
+                        <td><%= u.email %></td>
+                        <td>
+                            <span class="badge <%= u.role === 'admin' ? 'badge-admin' : 'badge-user' %>">
+                                <%= u.role %>
+                            </span>
+                        </td>
+                        <td style="font-size: 0.8rem; color: var(--text-muted);">
+                            <%= new Date(u.createdAt).toLocaleDateString() %>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<%- include('partials/footer') %>

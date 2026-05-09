@@ -47,13 +47,17 @@ const resetPasswordValidation = [
 
 // ─── Helpers ──────────────────────────────────────────────
 
-function handleValidationErrors(req, res) {
+function handleValidationErrors(req, res, view, title) {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    res.status(400).json({
-      success: false,
-      message: 'Validation failed.',
-      errors: errors.array().map((e) => ({ field: e.path, message: e.msg })),
+    const errorMsg = errors.array()[0].msg;
+    if (req.originalUrl.startsWith('/api/')) {
+        return res.status(400).json({ success: false, message: errorMsg });
+    }
+    res.render(view, { 
+        user: req.user || null, 
+        title, 
+        error: errorMsg 
     });
     return true;
   }
@@ -68,11 +72,11 @@ function sanitizeUser(user) {
 
 async function register(req, res, next) {
   try {
-    if (handleValidationErrors(req, res)) return;
+    if (handleValidationErrors(req, res, 'register', 'Register')) return;
     const { name, email, password } = req.body;
 
     if (await store.findUserByEmail(email)) {
-      return res.status(409).json({ success: false, message: 'Email is already registered.' });
+      return res.render('register', { user: null, title: 'Register', error: 'Email is already registered.' });
     }
 
     const hashedPassword = await bcrypt.hash(password, config.bcrypt.saltRounds);
@@ -85,11 +89,7 @@ async function register(req, res, next) {
       userAgent: req.headers['user-agent'],
     });
 
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully.',
-      data: sanitizeUser(user),
-    });
+    res.render('login', { user: null, title: 'Login', success: 'Registration successful! Please log in.' });
   } catch (error) {
     next(error);
   }
@@ -97,26 +97,21 @@ async function register(req, res, next) {
 
 async function login(req, res, next) {
   try {
-    if (handleValidationErrors(req, res)) return;
+    if (handleValidationErrors(req, res, 'login', 'Login')) return;
     const { email, password } = req.body;
 
     const user = await store.findUserByEmail(email);
     if (!user) {
-      return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+      return res.render('login', { user: null, title: 'Login', error: 'Invalid email or password.' });
     }
 
     // ── Account Lockout Check ──
     if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
       const retryAfterSeconds = Math.ceil((new Date(user.lockedUntil) - new Date()) / 1000);
-      await store.logAudit({
-        userId: user.id, event: 'login_failed',
-        ipAddress: req.ip, userAgent: req.headers['user-agent'],
-        metadata: { reason: 'account_locked' },
-      });
-      return res.status(403).json({
-        success: false,
-        message: 'Account locked due to too many failed attempts.',
-        data: { lockedUntil: user.lockedUntil, retryAfterSeconds },
+      return res.render('login', { 
+          user: null, 
+          title: 'Login', 
+          error: `Account locked. Try again in ${retryAfterSeconds} seconds.` 
       });
     }
 
@@ -126,37 +121,17 @@ async function login(req, res, next) {
       const failedAttempts = user.failedLoginAttempts + 1;
       const updates = { failedLoginAttempts: failedAttempts };
 
-      // Lock account if max attempts exceeded
       if (failedAttempts >= config.security.maxLoginAttempts) {
-        updates.lockedUntil = new Date(
-          Date.now() + config.security.lockDurationMinutes * 60 * 1000
-        ).toISOString();
-        await store.logAudit({
-          userId: user.id, event: 'account_locked',
-          ipAddress: req.ip, userAgent: req.headers['user-agent'],
-          metadata: { failedAttempts },
-        });
+        updates.lockedUntil = new Date(Date.now() + config.security.lockDurationMinutes * 60 * 1000).toISOString();
       }
 
       await store.updateUser(user.id, updates);
-      await store.logAudit({
-        userId: user.id, event: 'login_failed',
-        ipAddress: req.ip, userAgent: req.headers['user-agent'],
-        metadata: { failedAttempts },
-      });
-
       const remaining = config.security.maxLoginAttempts - failedAttempts;
-      if (remaining <= 0) {
-        return res.status(403).json({
-          success: false,
-          message: 'Account locked due to too many failed attempts.',
-          data: { lockedUntil: updates.lockedUntil, retryAfterSeconds: config.security.lockDurationMinutes * 60 },
-        });
-      }
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password.',
-        data: { remainingAttempts: remaining },
+      
+      return res.render('login', { 
+          user: null, 
+          title: 'Login', 
+          error: remaining > 0 ? `Invalid password. ${remaining} attempts left.` : 'Account locked due to too many failed attempts.' 
       });
     }
 
@@ -165,56 +140,47 @@ async function login(req, res, next) {
     const { token: accessToken } = signAccessToken(user);
     const { token: refreshToken } = await signRefreshToken(user);
 
+    // Set Cookie
+    res.cookie('accessToken', accessToken, {
+        httpOnly: true,
+        secure: config.nodeEnv === 'production',
+        maxAge: 15 * 60 * 1000 // 15 mins
+    });
+
     await store.logAudit({
       userId: user.id, event: 'login_success',
       ipAddress: req.ip, userAgent: req.headers['user-agent'],
     });
 
-    res.json({
-      success: true,
-      message: 'Login successful.',
-      data: { accessToken, refreshToken, expiresIn: config.jwt.accessExpiry },
-    });
+    res.redirect('/dashboard');
   } catch (error) {
     next(error);
   }
 }
 
 async function refresh(req, res, next) {
+  // In monolith, we usually just use the cookie, but we keep this for API compatibility
   try {
     const { refreshToken } = req.body;
-    if (!refreshToken) {
-      return res.status(400).json({ success: false, message: 'Refresh token is required.' });
-    }
+    if (!refreshToken) return res.status(400).json({ success: false });
 
     let decoded;
     try {
       decoded = verifyRefreshToken(refreshToken);
     } catch {
-      return res.status(401).json({ success: false, message: 'Invalid or expired refresh token.' });
+      return res.status(401).json({ success: false });
     }
 
     const storedToken = await store.findRefreshToken(decoded.jti);
-    if (!storedToken) {
-      return res.status(401).json({ success: false, message: 'Refresh token has been revoked.' });
-    }
+    if (!storedToken) return res.status(401).json({ success: false });
 
     const user = await store.findUserById(decoded.sub);
-    if (!user) {
-      return res.status(401).json({ success: false, message: 'User not found.' });
-    }
+    if (!user) return res.status(401).json({ success: false });
 
     const { token: accessToken } = signAccessToken(user);
-
-    await store.logAudit({
-      userId: user.id, event: 'token_refresh',
-      ipAddress: req.ip, userAgent: req.headers['user-agent'],
-    });
-
-    res.json({
-      success: true,
-      data: { accessToken, expiresIn: config.jwt.accessExpiry },
-    });
+    
+    res.cookie('accessToken', accessToken, { httpOnly: true, maxAge: 15 * 60 * 1000 });
+    res.json({ success: true, data: { accessToken } });
   } catch (error) {
     next(error);
   }
@@ -222,23 +188,8 @@ async function refresh(req, res, next) {
 
 async function logout(req, res, next) {
   try {
-    const { refreshToken } = req.body;
-    if (!refreshToken) {
-      return res.status(400).json({ success: false, message: 'Refresh token is required.' });
-    }
-
-    try {
-      const decoded = verifyRefreshToken(refreshToken);
-      await store.removeRefreshToken(decoded.jti);
-      await store.logAudit({
-        userId: decoded.sub, event: 'logout',
-        ipAddress: req.ip, userAgent: req.headers['user-agent'],
-      });
-    } catch {
-      // Token may be expired — that's fine, user wants to logout anyway
-    }
-
-    res.json({ success: true, message: 'Logged out successfully.' });
+    res.clearCookie('accessToken');
+    res.redirect('/login');
   } catch (error) {
     next(error);
   }
@@ -246,40 +197,25 @@ async function logout(req, res, next) {
 
 async function changePassword(req, res, next) {
   try {
-    if (handleValidationErrors(req, res)) return;
+    const user = await store.findUserById(req.user.sub);
+    if (handleValidationErrors(req, res, 'change-password', 'Change Password')) return;
+    
     const { currentPassword, newPassword } = req.body;
-    const userId = req.user.sub;
-
-    const user = await store.findUserById(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found.' });
-    }
-
     const isValid = await bcrypt.compare(currentPassword, user.password);
+    
     if (!isValid) {
-      return res.status(401).json({ success: false, message: 'Current password is incorrect.' });
+      return res.render('change-password', { user, title: 'Change Password', error: 'Current password is incorrect.' });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, config.bcrypt.saltRounds);
-    await store.updateUser(userId, { password: hashedPassword });
+    await store.updateUser(user.id, { password: hashedPassword });
+    await store.removeAllUserRefreshTokens(user.id);
 
-    // Invalidate ALL existing refresh tokens for this user
-    await store.removeAllUserRefreshTokens(userId);
-
-    // Issue fresh token pair for current session
-    const updatedUser = await store.findUserById(userId);
-    const { token: accessToken } = signAccessToken(updatedUser);
-    const { token: refreshToken } = await signRefreshToken(updatedUser);
-
-    await store.logAudit({
-      userId, event: 'password_changed',
-      ipAddress: req.ip, userAgent: req.headers['user-agent'],
-    });
-
-    res.json({
-      success: true,
-      message: 'Password changed successfully. All other sessions have been invalidated.',
-      data: { accessToken, refreshToken, expiresIn: config.jwt.accessExpiry },
+    res.render('profile', { 
+        user, 
+        userData: sanitizeUser(user), 
+        title: 'Profile', 
+        success: 'Password changed successfully.' 
     });
   } catch (error) {
     next(error);
@@ -288,34 +224,22 @@ async function changePassword(req, res, next) {
 
 async function forgotPassword(req, res, next) {
   try {
-    if (handleValidationErrors(req, res)) return;
+    if (handleValidationErrors(req, res, 'forgot-password', 'Forgot Password')) return;
     const { email } = req.body;
-
-    // Always return same response to prevent email enumeration
-    const genericResponse = {
-      success: true,
-      message: 'If an account with that email exists, a password reset link has been sent.',
-    };
-
     const user = await store.findUserByEmail(email);
-    if (!user) return res.json(genericResponse);
 
-    const resetToken = generateResetToken();
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+    if (user) {
+        const resetToken = generateResetToken();
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        await store.storeResetToken(resetToken, { userId: user.id, expiresAt });
+        console.log(`\n📧 Reset Token for ${email}: ${resetToken}\n`);
+    }
 
-    await store.storeResetToken(resetToken, { userId: user.id, expiresAt });
-
-    // In production, send via email — here we log to console
-    console.log(`\n📧 Password Reset Token for ${email}:`);
-    console.log(`   Token: ${resetToken}`);
-    console.log(`   Expires: ${expiresAt}\n`);
-
-    await store.logAudit({
-      userId: user.id, event: 'password_reset_request',
-      ipAddress: req.ip, userAgent: req.headers['user-agent'],
+    res.render('forgot-password', { 
+        user: null, 
+        title: 'Forgot Password', 
+        success: 'If an account exists, a reset token has been logged to the server console.' 
     });
-
-    res.json(genericResponse);
   } catch (error) {
     next(error);
   }
@@ -323,38 +247,22 @@ async function forgotPassword(req, res, next) {
 
 async function resetPassword(req, res, next) {
   try {
-    if (handleValidationErrors(req, res)) return;
+    if (handleValidationErrors(req, res, 'reset-password', 'Reset Password')) return;
     const { token, newPassword } = req.body;
 
     const resetEntry = await store.findResetToken(token);
     if (!resetEntry) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired reset token.' });
+      return res.render('reset-password', { user: null, title: 'Reset Password', error: 'Invalid or expired token.' });
     }
 
     const user = await store.findUserById(resetEntry.userId);
-    if (!user) {
-      return res.status(400).json({ success: false, message: 'Invalid reset token.' });
-    }
-
     const hashedPassword = await bcrypt.hash(newPassword, config.bcrypt.saltRounds);
-    await store.updateUser(user.id, {
-      password: hashedPassword,
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-    });
-
+    
+    await store.updateUser(user.id, { password: hashedPassword, failedLoginAttempts: 0, lockedUntil: null });
     await store.removeResetToken(token);
     await store.removeAllUserRefreshTokens(user.id);
 
-    await store.logAudit({
-      userId: user.id, event: 'password_reset',
-      ipAddress: req.ip, userAgent: req.headers['user-agent'],
-    });
-
-    res.json({
-      success: true,
-      message: 'Password reset successful. Please log in with your new password.',
-    });
+    res.render('login', { user: null, title: 'Login', success: 'Password reset successful. Please log in.' });
   } catch (error) {
     next(error);
   }

@@ -1,0 +1,34 @@
+<%- include('partials/header', { title: 'Home' }) %>
+
+<div class="card" style="text-align: center; padding: 4rem 2rem;">
+    <h1 style="font-size: 3rem; margin-bottom: 1.5rem; color: var(--primary);">Secure JWT Monolith</h1>
+    <p style="font-size: 1.25rem; color: var(--text-muted); max-width: 600px; margin: 0 auto 2.5rem;">
+        A high-performance, full-stack Express.js application featuring MySQL persistence, JWT-over-Cookies, and server-side rendering.
+    </p>
+    
+    <% if (!user) { %>
+        <div style="display: flex; gap: 1rem; justify-content: center;">
+            <a href="/register" class="btn btn-primary" style="padding: 1rem 2rem; font-size: 1.1rem;">Get Started</a>
+            <a href="/login" class="btn btn-outline" style="padding: 1rem 2rem; font-size: 1.1rem;">Sign In</a>
+        </div>
+    <% } else { %>
+        <a href="/dashboard" class="btn btn-primary" style="padding: 1rem 2rem; font-size: 1.1rem;">Go to Dashboard</a>
+    <% } %>
+</div>
+
+<div style="margin-top: 4rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
+    <div class="card">
+        <h3>🛡️ Robust Security</h3>
+        <p style="margin-top: 1rem; color: var(--text-muted);">JWT tokens stored in HttpOnly cookies protect against XSS and CSRF attacks.</p>
+    </div>
+    <div class="card">
+        <h3>🗄️ MySQL Persistence</h3>
+        <p style="margin-top: 1rem; color: var(--text-muted);">Full Sequelize integration ensures your data is safe and scalable.</p>
+    </div>
+    <div class="card">
+        <h3>⚡ Monolithic Speed</h3>
+        <p style="margin-top: 1rem; color: var(--text-muted);">Zero client-side hydration. Instant server-side rendering for the best performance.</p>
+    </div>
+</div>
+
+<%- include('partials/footer') %>

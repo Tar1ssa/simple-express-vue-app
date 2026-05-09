@@ -1,0 +1,25 @@
+<%- include('partials/header', { title: 'Profile' }) %>
+
+<div style="max-width: 600px; margin: 0 auto;">
+    <div class="card">
+        <h1>Profile Settings</h1>
+        <p style="color: var(--text-muted); margin-bottom: 2rem;">Update your personal information.</p>
+
+        <form action="/profile?_method=PUT" method="POST">
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" name="name" value="<%= userData.name %>" required>
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" name="email" value="<%= userData.email %>" required>
+            </div>
+            <div style="display: flex; gap: 1rem;">
+                <button type="submit" class="btn btn-primary">Update Profile</button>
+                <a href="/change-password" class="btn btn-outline">Change Password</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<%- include('partials/footer') %>

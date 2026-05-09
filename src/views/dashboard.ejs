@@ -1,0 +1,30 @@
+<%- include('partials/header', { title: 'Dashboard' }) %>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <div>
+            <h1>Dashboard</h1>
+            <p style="color: var(--text-muted);">Welcome back, <strong><%= user.name %></strong>!</p>
+        </div>
+        <div class="badge <%= user.role === 'admin' ? 'badge-admin' : 'badge-user' %>">
+            <%= user.role %>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;">
+        <div class="card" style="background: rgba(99, 102, 241, 0.05);">
+            <h3 style="color: var(--primary); margin-bottom: 0.5rem;">Profile Status</h3>
+            <p style="font-size: 0.9rem; color: var(--text-muted);">Your account is secure and verified.</p>
+            <a href="/profile" class="btn btn-outline" style="margin-top: 1rem;">Edit Profile</a>
+        </div>
+        <% if (user.role === 'admin') { %>
+            <div class="card" style="background: rgba(34, 197, 94, 0.05);">
+                <h3 style="color: var(--success); margin-bottom: 0.5rem;">User Management</h3>
+                <p style="font-size: 0.9rem; color: var(--text-muted);">You have administrative privileges.</p>
+                <a href="/users" class="btn btn-outline" style="margin-top: 1rem;">View All Users</a>
+            </div>
+        <% } %>
+    </div>
+</div>
+
+<%- include('partials/footer') %>

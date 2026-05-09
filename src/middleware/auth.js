@@ -7,16 +7,26 @@ const store = require('../store/dbStore');
  * checks the blacklist, and attaches decoded user to req.user.
  */
 async function authenticate(req, res, next) {
+  let token;
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({
-      success: false,
-      message: 'Access denied. No token provided.',
-    });
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (req.cookies && req.cookies.accessToken) {
+    token = req.cookies.accessToken;
   }
 
-  const token = authHeader.split(' ')[1];
+  if (!token) {
+    // If it's an API call, return JSON
+    if (req.originalUrl.startsWith('/api/')) {
+      return res.status(401).json({
+        success: false,
+        message: 'Access denied. No token provided.',
+      });
+    }
+    // Otherwise, redirect to login page
+    return res.redirect('/login');
+  }
 
   try {
     const decoded = verifyAccessToken(token);
@@ -41,16 +51,20 @@ async function authenticate(req, res, next) {
     req.user = decoded;
     next();
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
+    if (req.originalUrl.startsWith('/api/')) {
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({
+          success: false,
+          message: 'Token has expired. Please refresh your token.',
+        });
+      }
       return res.status(401).json({
         success: false,
-        message: 'Token has expired. Please refresh your token.',
+        message: 'Invalid token.',
       });
     }
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid token.',
-    });
+    // Redirect to login for non-API calls
+    return res.redirect('/login');
   }
 }
 

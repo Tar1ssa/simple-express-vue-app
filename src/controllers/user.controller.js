@@ -44,14 +44,21 @@ function sanitizeUser(user) {
 
 // ─── Controllers ──────────────────────────────────────────
 
+async function getDashboard(req, res, next) {
+  try {
+    const user = await store.findUserById(req.user.sub);
+    if (!user) return res.redirect('/login');
+    res.render('dashboard', { user, title: 'Dashboard' });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function getProfile(req, res, next) {
   try {
     const user = await store.findUserById(req.user.sub);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found.' });
-    }
-
-    res.json({ success: true, data: sanitizeUser(user) });
+    if (!user) return res.redirect('/login');
+    res.render('profile', { user, userData: sanitizeUser(user), title: 'Profile' });
   } catch (error) {
     next(error);
   }
@@ -99,10 +106,12 @@ async function updateProfile(req, res, next) {
       metadata: { updatedFields: Object.keys(updates) },
     });
 
-    res.json({
-      success: true,
-      message: 'Profile updated successfully.',
-      data: sanitizeUser(updatedUser),
+    const user = await store.findUserById(userId);
+    res.render('profile', { 
+      user, 
+      userData: sanitizeUser(updatedUser), 
+      title: 'Profile',
+      success: 'Profile updated successfully.' 
     });
   } catch (error) {
     next(error);
@@ -111,14 +120,16 @@ async function updateProfile(req, res, next) {
 
 async function listUsers(req, res, next) {
   try {
+    const user = await store.findUserById(req.user.sub);
     const users = (await store.getAllUsers()).map(sanitizeUser);
-    res.json({ success: true, data: users, total: users.length });
+    res.render('users', { user, users, title: 'User Management' });
   } catch (error) {
     next(error);
   }
 }
 
 module.exports = {
+  getDashboard,
   getProfile,
   updateProfile,
   updateProfileValidation,

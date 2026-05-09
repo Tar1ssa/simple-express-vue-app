@@ -1,4 +1,6 @@
 const express = require('express');
+const path = require('path');
+const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -11,19 +13,38 @@ const userRoutes = require('./routes/user.routes');
 
 const app = express();
 
+// ─── View Engine Setup ───
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+app.use(express.static(path.join(__dirname, 'public')));
+
 // ─── Global Middleware ────────────────────────────────────
-app.use(helmet());
+app.use(cookieParser());
+app.use(helmet({
+  contentSecurityPolicy: false,
+}));
 app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+const { authenticate } = require('./middleware/auth');
 
 // ─── Root Route ───────────────────────────────────────────
-app.get('/', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Welcome to the Express JWT API',
-    docs: '/api/health'
-  });
+app.get('/', async (req, res, next) => {
+  // Try to authenticate to get user info if logged in
+  let user = null;
+  if (req.cookies.accessToken) {
+    try {
+      const { verifyAccessToken } = require('./utils/token');
+      const decoded = verifyAccessToken(req.cookies.accessToken);
+      const store = require('./store/dbStore');
+      user = await store.findUserById(decoded.sub);
+    } catch (err) {
+      // Ignore token errors on home page
+    }
+  }
+  res.render('index', { user, title: 'Home' });
 });
 
 // ─── Health Check ─────────────────────────────────────────
