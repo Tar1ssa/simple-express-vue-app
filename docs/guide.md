@@ -1,30 +1,28 @@
-# Express JWT API - Complete Project Guide
+# Express JWT Monolith - Complete Project Guide
 
 ## 📌 Project Overview
-**Express JWT API** is a production-style full-stack application. It features a robust **Express.js** backend backed by a **MySQL** database and a modern **Vue 3** frontend. Its primary goal is to demonstrate a secure authentication workflow using JSON Web Tokens (JWT), including dual-token strategy, account security, and role-based access control.
+**Express JWT Monolith** is a production-style full-stack application. It features a robust **Express.js** backend backed by a **MySQL** database and a server-side rendered (SSR) UI using **EJS**. Its primary goal is to demonstrate a secure authentication workflow using JSON Web Tokens (JWT) stored in secure cookies, account security, and role-based access control.
 
 ---
 
 ## 🏗️ Architecture & Folder Structure
 
-The project is split into a backend API and a frontend UI.
+The project is a monolithic application where the server handles both logic and UI.
 
 ```text
 express-jwt-api/
-├── frontend/          # Vue 3 Single Page Application (UI)
-│   ├── src/           # Frontend source code (Views, Stores, Services)
-│   └── vite.config.js # Frontend build & proxy configuration
 ├── src/               # Express.js Backend source code
 │   ├── app.js         # Entry point & middleware
 │   ├── config/        # Environment & Database config
-│   ├── controllers/   # Business logic
+│   ├── controllers/   # Business logic & Page rendering
 │   ├── models/        # Sequelize models (MySQL)
-│   ├── routes/        # API endpoints
+│   ├── routes/        # Page and API endpoints
 │   ├── store/         # Database store service
+│   ├── views/         # EJS Templates (HTML UI)
 │   └── middleware/    # Auth & Security interceptors
 ├── docs/              # Project documentation
 ├── .env               # Environment variables
-└── package.json       # Backend dependencies
+└── package.json       # Project dependencies
 ```
 
 ---
@@ -38,18 +36,19 @@ This project is designed to handle real-world security scenarios. Here is exactl
 *   **Test Case**: 
     1. Go to `/register` and create a user.
     2. Try to register again with the same email (it should fail).
-    3. Login at `/login` with your new credentials to receive your JWT tokens.
+    3. Login at `/login` with your new credentials.
 
-### 2. Dual-Token Strategy (Access & Refresh)
-*   **Feature**: Uses short-lived Access Tokens (15m) and long-lived Refresh Tokens (7d).
+### 2. Secure Token Storage (HttpOnly Cookies)
+*   **Feature**: Uses JWT tokens stored in `HttpOnly` cookies. This prevents Cross-Site Scripting (XSS) attacks from stealing your session.
 *   **Test Case**: 
-    1. Login and watch the `localStorage` in your browser.
-    2. The frontend `api.js` service will automatically use the `refreshToken` to get a new `accessToken` if the old one expires or is deleted.
+    1. Login and open your browser's Developer Tools (F12).
+    2. Go to the **Application** tab -> **Cookies**.
+    3. You will see an `accessToken` cookie. Notice you cannot access it via `document.cookie` in the console (Security feature).
 
 ### 3. Role-Based Access Control (RBAC)
-*   **Feature**: Restricts certain pages/endpoints based on user roles (`admin` vs `user`).
+*   **Feature**: Restricts pages based on user roles (`admin` vs `user`).
 *   **Test Case**: 
-    1. Login with a regular user. Try to visit the `/users` page. You will be redirected back to the dashboard.
+    1. Login with a regular user. Try to visit the `/users` page manually. You will be redirected back to the dashboard.
     2. Login with the default admin (`admin@example.com` / `Admin123!`). Now you can access the `/users` management table.
 
 ### 4. Account Lockout Protection
@@ -77,8 +76,9 @@ This project is designed to handle real-world security scenarios. Here is exactl
 
 ### 1. Prerequisites
 *   Node.js (v18+) installed.
+*   MySQL Server (XAMPP, etc.) running.
 
-### 2. Setup Backend
+### 2. Setup
 1. Create a database named `express_jwt_api` in your MySQL server.
 2. Update `.env` with your MySQL `DB_USER` and `DB_PASSWORD`.
 3. Install dependencies and run:
@@ -87,21 +87,13 @@ npm install
 npm run dev
 ```
 *The app will automatically create the tables on the first run.*
-*Backend runs on `http://localhost:3000`*
-
-### 3. Setup Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-*Frontend runs on `http://localhost:5173`*
 
 ---
 
 ## 🛠️ Security Technologies Used
 *   **jsonwebtoken**: For secure, stateless authentication.
 *   **bcryptjs**: For industrial-grade password hashing.
+*   **cookie-parser**: For secure token handling.
 *   **helmet**: Sets security headers to prevent common web attacks.
 *   **express-validator**: Sanitizes and validates all user inputs.
-*   **Pinia**: For secure frontend state management.
+*   **Sequelize**: For safe database interaction and protection against SQL injection.
